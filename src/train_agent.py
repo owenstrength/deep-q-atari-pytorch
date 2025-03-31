@@ -14,6 +14,7 @@ device = torch.device("mps" if torch.backends.mps.is_available() else
                      "cuda" if torch.cuda.is_available() else 
                      "cpu")
 print(f"Using device: {device}")
+device = torch.device("cpu")
 
 def preprocess_frame(frame):
     """Convert RGB frame to grayscale, resize to 84x84, and normalize."""
@@ -156,7 +157,7 @@ def train_agent(env_name, num_frames=50000000):
         
         # Save the model periodically
         if frame_idx % save_model_interval == 0:
-            model_path = f"logs/{env_name}_frame_{frame_idx}.pth"
+            model_path = f"logs/{env_name.split('/')[1]}_frame_{frame_idx}.pth"
             torch.save(agent.model.state_dict(), model_path)
             print(f"Model saved to {model_path}")
             
