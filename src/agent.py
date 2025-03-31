@@ -24,19 +24,19 @@ class DQNAgent:
             eps=0.01
         )
         
-        # Experience replay buffer (capacity of 1,000,000 from the paper)
-        self.replay_buffer = deque(maxlen=1000000) # changed to 100k
+        # Reduced replay buffer size to prevent memory issues
+        self.replay_buffer = deque(maxlen=100000)  # Changed from 1M to 100K
         self.batch_size = 32
         self.gamma = 0.99  # Discount factor
         
         # Epsilon annealing
         self.epsilon_start = 1.0
-        self.epsilon_end = 0.05 #paper ends at point 0.05
+        self.epsilon_end = 0.05  # Paper ends at 0.05
         self.epsilon_decay_steps = 1000000  # 1M frames for linear decay
         self.epsilon = self.epsilon_start
         
-        # Target network update frequency (every 10,000 steps from the paper)
-        self.target_update_freq = 1000 # changed to 100
+        # Target network update frequency
+        self.target_update_freq = 1000  # Changed from 10K to 1K
         
         # Counters
         self.train_step = 0
@@ -58,7 +58,12 @@ class DQNAgent:
             with torch.no_grad():
                 state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
                 q_values = self.model(state_tensor)
-                return q_values.argmax().item()  # Exploit
+                action = q_values.argmax().item()  # Exploit
+                
+                # Clean up tensor
+                del state_tensor, q_values
+                
+                return action
 
     def store_experience(self, experience):
         """Store experience in the replay buffer with reward clipping."""
@@ -99,7 +104,7 @@ class DQNAgent:
         self.optimizer.zero_grad()
         loss.backward()
         
-        # Gradient clipping (not explicitly mentioned in the paper but often used)
+        # Gradient clipping
         for param in self.model.parameters():
             param.grad.data.clamp_(-1, 1)
             
@@ -107,13 +112,18 @@ class DQNAgent:
         
         self.train_step += 1
         
+        # Explicitly release memory
+        del states_tensor, actions_tensor, rewards_tensor, next_states_tensor, dones_tensor
+        del q_values, next_q_values, target_q_values, loss
+        
         # Update target network periodically
         if self.train_step % self.target_update_freq == 0:
             self.target_model.load_state_dict(self.model.state_dict())
 
     def load_model(self, model_path):
         """Load the trained DQN model from the specified path."""
-        self.model.load_state_dict(torch.load(model_path))
+        self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+        self.target_model.load_state_dict(torch.load(model_path, map_location=self.device))
         self.model.eval()
 
     def act(self, state):
@@ -121,4 +131,9 @@ class DQNAgent:
         with torch.no_grad():
             state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
             q_values = self.model(state_tensor)
-            return q_values.argmax().item()
+            action = q_values.argmax().item()
+            
+            # Clean up tensor
+            del state_tensor, q_values
+            
+            return action
