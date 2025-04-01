@@ -12,11 +12,10 @@ from agent import DQNAgent
 from tqdm import tqdm
 
 # Check available devices
-device = torch.device("mps" if torch.backends.mps.is_available() else 
-                     "cuda" if torch.cuda.is_available() else 
+device = torch.device("cuda" if torch.cuda.is_available() else 
+                     "mps" if torch.backends.mps.is_available() else 
                      "cpu")
 print(f"Using device: {device}")
-#device = torch.device("cpu")  # Force CPU for stability
 
 def preprocess_frame(frame):
     """Convert RGB frame to grayscale, resize to 84x84, and normalize."""
@@ -32,55 +31,65 @@ def train_agent(env_name, num_frames=50000000, checkpoint=None):
     env = gym.make(env_name, render_mode="rgb_array")
     agent = DQNAgent(env.action_space, device)
     
+    if checkpoint:
+        agent.epsilon = 0.05  # Set epsilon when resuming training, we assume we got this far
+    
     # Create logs directory
-    os.makedirs("logs", exist_ok=True)
-    log_file = "logs/reward_log.csv"
+    os.makedirs(f"logs_{env_name.split('/')[1]}", exist_ok=True)
+    log_file = f"logs_{env_name.split('/')[1]}/reward_log.csv"
     
     # Initialize training variables
     log_data = []
     episode = 0
     frame_idx = 0
-    evaluation_interval = 250000  # Evaluate every 250k frames
     save_model_interval = 10000  # Save model every 10k frames
     memory_check_interval = 5000  # Check memory usage every 5k frames
     gc_interval = 1000  # Run garbage collection every 1k frames
     
     # Load from checkpoint if provided
     if checkpoint and os.path.exists(checkpoint):
-        agent.model.load_state_dict(torch.load(checkpoint, map_location=device))
-        agent.target_model.load_state_dict(torch.load(checkpoint, map_location=device))
-        # Extract frame number from filename
-        try:
-            start_frame = int(checkpoint.split('_')[-1].split('.')[0])
-            frame_idx = start_frame
-            print(f"Continuing from checkpoint at frame {start_frame}")
-            
-            # Try to load existing log data if available
-            if os.path.exists(log_file):
+        checkpoint_dict = torch.load(checkpoint, map_location=device)
+        agent.model.load_state_dict(checkpoint_dict['model_state_dict'])
+        agent.target_model.load_state_dict(checkpoint_dict['model_state_dict'])
+        agent.optimizer.load_state_dict(checkpoint_dict['optimizer_state_dict'])
+        agent.frame_count = checkpoint_dict.get('frame_count', 0)
+        agent.train_step = checkpoint_dict.get('train_step', 0)
+        frame_idx = checkpoint_dict.get('frame_idx', 0)
+        episode = checkpoint_dict.get('episode', 0)
+        print(f"Continuing from checkpoint at frame {frame_idx}, episode {episode}")
+        
+        # Load existing log data if available
+        if os.path.exists(log_file):
+            try:
                 existing_log = pd.read_csv(log_file)
                 if not existing_log.empty:
                     log_data = existing_log.to_dict('records')
-                    episode = max(existing_log['episode']) + 1
-                    print(f"Loaded existing log data, continuing from episode {episode}")
-        except:
-            print("Couldn't parse frame number from checkpoint filename, starting from frame 0")
+                    print(f"Loaded existing log data with {len(log_data)} entries")
+            except Exception as e:
+                print(f"Error loading log data: {e}")
     
     # Initialize the first state
     state, _ = env.reset()
     processed_frame = preprocess_frame(state)
-    stacked_frames = np.stack([processed_frame] * 4, axis=0)
+    # Convert to tensor immediately
+    processed_frame_tensor = torch.FloatTensor(processed_frame).to(device)
+    stacked_frames = torch.stack([processed_frame_tensor] * 4, dim=0)
     
     # Pre-populate replay memory with random actions (if not loading from checkpoint)
     if not checkpoint:
         print("Initializing replay memory with random experiences...")
-        for _ in tqdm(range(min(10000, agent.replay_buffer.maxlen))):  # Reduced from 50k to 10k
+        init_experiences = min(10000, agent.buffer_size)  # Reduced from 50k to 10k
+        for _ in tqdm(range(init_experiences)):
             action = env.action_space.sample()  # Random action
             next_state, reward, terminated, truncated, _ = env.step(action)
             
             # Process next frame
             processed_next_frame = preprocess_frame(next_state)
-            next_stacked_frames = np.roll(stacked_frames, shift=-1, axis=0)
-            next_stacked_frames[-1] = processed_next_frame
+            processed_next_frame_tensor = torch.FloatTensor(processed_next_frame).to(device)
+            
+            # Create next stacked frames using tensor operations
+            next_stacked_frames = torch.roll(stacked_frames, shifts=-1, dims=0)
+            next_stacked_frames[-1] = processed_next_frame_tensor
             
             # Store experience
             agent.store_experience((
@@ -96,9 +105,10 @@ def train_agent(env_name, num_frames=50000000, checkpoint=None):
             if terminated or truncated:
                 state, _ = env.reset()
                 processed_frame = preprocess_frame(state)
-                stacked_frames = np.stack([processed_frame] * 4, axis=0)
+                processed_frame_tensor = torch.FloatTensor(processed_frame).to(device)
+                stacked_frames = torch.stack([processed_frame_tensor] * 4, dim=0)
     
-    # Main training loop (frame-based, not episode-based as in the paper)
+    # Main training loop
     print("Starting main training loop...")
     pbar = tqdm(total=num_frames, initial=frame_idx)
     
@@ -109,7 +119,8 @@ def train_agent(env_name, num_frames=50000000, checkpoint=None):
     # Reset for training
     state, info = env.reset()
     processed_frame = preprocess_frame(state)
-    stacked_frames = np.stack([processed_frame] * 4, axis=0)
+    processed_frame_tensor = torch.FloatTensor(processed_frame).to(device)
+    stacked_frames = torch.stack([processed_frame_tensor] * 4, dim=0)
     
     if 'lives' in info:
         lives = info['lives']
@@ -132,10 +143,11 @@ def train_agent(env_name, num_frames=50000000, checkpoint=None):
         
         # Process next frame
         processed_next_frame = preprocess_frame(next_state)
+        processed_next_frame_tensor = torch.FloatTensor(processed_next_frame).to(device)
         
-        # Create next stacked state
-        next_stacked_frames = np.roll(stacked_frames, shift=-1, axis=0)
-        next_stacked_frames[-1] = processed_next_frame
+        # Create next stacked state using tensor operations
+        next_stacked_frames = torch.roll(stacked_frames, shifts=-1, dims=0)
+        next_stacked_frames[-1] = processed_next_frame_tensor
         
         # Store the transition
         agent.store_experience((
@@ -163,7 +175,13 @@ def train_agent(env_name, num_frames=50000000, checkpoint=None):
             process = psutil.Process(os.getpid())
             memory_info = process.memory_info()
             memory_usage_gb = memory_info.rss / 1024 / 1024 / 1024
-            tqdm.write(f"Memory usage: {memory_usage_gb:.2f} GB")
+            gpu_memory_allocated = 0
+            if torch.cuda.is_available():
+                gpu_memory_allocated = torch.cuda.memory_allocated() / 1024 / 1024 / 1024
+                gpu_memory_reserved = torch.cuda.memory_reserved() / 1024 / 1024 / 1024
+                tqdm.write(f"Memory usage: RAM {memory_usage_gb:.2f} GB, GPU allocated: {gpu_memory_allocated:.2f} GB, GPU reserved: {gpu_memory_reserved:.2f} GB")
+            else:
+                tqdm.write(f"Memory usage: RAM {memory_usage_gb:.2f} GB")
         
         # Handle episode termination
         if terminated or truncated:
@@ -176,7 +194,8 @@ def train_agent(env_name, num_frames=50000000, checkpoint=None):
                 "frames": frame_idx,
                 "reward": episode_reward,
                 "avg_reward_last_100": avg_reward,
-                "epsilon": agent.epsilon
+                "epsilon": agent.epsilon,
+                "q_value": agent.q_values
             })
             
             # Print progress
@@ -186,7 +205,8 @@ def train_agent(env_name, num_frames=50000000, checkpoint=None):
             # Reset the environment
             state, info = env.reset()
             processed_frame = preprocess_frame(state)
-            stacked_frames = np.stack([processed_frame] * 4, axis=0)
+            processed_frame_tensor = torch.FloatTensor(processed_frame).to(device)
+            stacked_frames = torch.stack([processed_frame_tensor] * 4, dim=0)
             episode_reward = 0
             episode += 1
             
@@ -200,17 +220,44 @@ def train_agent(env_name, num_frames=50000000, checkpoint=None):
         
         # Save the model periodically
         if frame_idx % save_model_interval == 0:
-            model_path = f"logs/{env_name.split('/')[1]}_frame_{frame_idx}.pth"
-            torch.save(agent.model.state_dict(), model_path)
+            # Create a dictionary with all the data to save
+            checkpoint_dict = {
+                'model_state_dict': agent.model.state_dict(),
+                'optimizer_state_dict': agent.optimizer.state_dict(),
+                'frame_idx': frame_idx,
+                'episode': episode,
+                'frame_count': agent.frame_count,
+                'train_step': agent.train_step
+            }
+            
+            model_path = f"logs_{env_name.split('/')[1]}/{env_name.split('/')[1]}_frame_{frame_idx}.pth"
+            torch.save(checkpoint_dict, model_path)
             print(f"Model saved to {model_path}")
+            
+            # Only keep the most recent checkpoint to save space
+            for old_checkpoint in os.listdir(f"logs_{env_name.split('/')[1]}"):
+                if old_checkpoint.endswith(".pth") and old_checkpoint != model_path.split('/')[-1]:
+                    try:
+                        os.remove(os.path.join(f"logs_{env_name.split('/')[1]}", old_checkpoint))
+                    except Exception as e:
+                        print(f"Could not remove old checkpoint: {e}")
             
             # Save log data to CSV
             if log_data:
                 pd.DataFrame(log_data).to_csv(log_file, index=False)
     
     # Final save
+    checkpoint_dict = {
+        'model_state_dict': agent.model.state_dict(),
+        'optimizer_state_dict': agent.optimizer.state_dict(),
+        'frame_idx': frame_idx,
+        'episode': episode,
+        'frame_count': agent.frame_count,
+        'train_step': agent.train_step
+    }
+    
     model_path = f"logs/{env_name.split('/')[1]}_model_final.pth"
-    torch.save(agent.model.state_dict(), model_path)
+    torch.save(checkpoint_dict, model_path)
     print(f"Final model saved to {model_path}")
     
     # Save final log data
@@ -223,8 +270,9 @@ def train_agent(env_name, num_frames=50000000, checkpoint=None):
     print("Training complete!")
 
 if __name__ == "__main__":
-    # Uncomment line below to continue from your last checkpoint
-    #train_agent("ALE/Pong-v5", num_frames=5000000, checkpoint="logs/Pong-v5_frame_190000.pth")
+    # Uncomment the line below to continue from your last checkpoint
+    env = "ALE/BeamRider-v5"
+    #train_agent(env, num_frames=5000000, checkpoint="logs/Pong-v5_frame_3800000.pth")
     
     # Or start fresh
-    train_agent("ALE/Pong-v5", num_frames=5000000)
+    train_agent(env, num_frames=5000000)
