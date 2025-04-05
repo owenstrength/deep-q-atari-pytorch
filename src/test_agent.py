@@ -17,7 +17,7 @@ def evaluate_agent(env_name, model_path, num_episodes=10):
     """Evaluate the DQN agent in the specified environment."""
     # Create the environment
     gym.register_envs(ale_py)
-    env = gym.make(env_name, render_mode="rgb_array")  # Render in human mode
+    env = gym.make(env_name, render_mode="human")  # Render in human mode
     
     # Use the same device as training
     device = torch.device("mps" if torch.backends.mps.is_available() else 
@@ -71,5 +71,6 @@ def evaluate_agent(env_name, model_path, num_episodes=10):
     return total_rewards
 
 if __name__ == "__main__":
-    model_path = "logs/Pong-v5_frame_5000000.pth"  # Update this path to your model
-    evaluate_agent("ALE/Pong-v5", model_path, num_episodes=25)  # Evaluate the agent
+    env = "BeamRider-v5"
+    model_path = f"logs_{env}/{env}_frame_2840000.pth"  # Update this path to your model
+    evaluate_agent(f"ALE/{env}", model_path, num_episodes=25)  # Evaluate the agent

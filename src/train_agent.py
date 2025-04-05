@@ -256,7 +256,7 @@ def train_agent(env_name, num_frames=50000000, checkpoint=None):
         'train_step': agent.train_step
     }
     
-    model_path = f"logs/{env_name.split('/')[1]}_model_final.pth"
+    model_path = f"logs_{env_name.split('/')[1]}/{env_name.split('/')[1]}_model_final.pth"
     torch.save(checkpoint_dict, model_path)
     print(f"Final model saved to {model_path}")
     
@@ -271,8 +271,8 @@ def train_agent(env_name, num_frames=50000000, checkpoint=None):
 
 if __name__ == "__main__":
     # Uncomment the line below to continue from your last checkpoint
-    env = "ALE/BeamRider-v5"
-    #train_agent(env, num_frames=5000000, checkpoint="logs/Pong-v5_frame_3800000.pth")
+    env = "ALE/SpaceInvaders-v5"
+    train_agent(env, num_frames=5000000, checkpoint="logs_SpaceInvaders-v5/SpaceInvaders-v5_frame_1040000.pth")
     
     # Or start fresh
-    train_agent(env, num_frames=5000000)
+    #train_agent(env, num_frames=5000000)
