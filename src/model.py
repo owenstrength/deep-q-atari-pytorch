@@ -11,27 +11,24 @@ class DQN(nn.Module):
         self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
         self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
 
-        # Compute size of the flattened feature maps dynamically
         self._conv_output_size = self._get_conv_output((4, 84, 84))
 
-        # Fully connected layers
         self.fc1 = nn.Linear(self._conv_output_size, 512)
         self.fc2 = nn.Linear(512, action_size)
 
     def _get_conv_output(self, shape):
-        """Pass a dummy tensor to calculate flattened size dynamically."""
         with torch.no_grad():
-            x = torch.zeros(1, *shape)  # Batch size of 1
+            x = torch.zeros(1, *shape) 
             x = self.conv1(x)
             x = self.conv2(x)
             x = self.conv3(x)
-            return x.numel()  # Total flattened features
+            return x.numel()
 
     def forward(self, x):
         x = F.leaky_relu(self.conv1(x), negative_slope=0.01)
         x = F.leaky_relu(self.conv2(x), negative_slope=0.01)
         x = F.leaky_relu(self.conv3(x), negative_slope=0.01)
         
-        x = x.view(x.size(0), -1)  # Flatten
+        x = x.view(x.size(0), -1)
         x = F.leaky_relu(self.fc1(x), negative_slope=0.01)
         return self.fc2(x)  # Output Q-values for all actions

@@ -4,7 +4,11 @@ import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
 import random
+
 from model import DQN
+from config import config
+
+CONFIGS = config
 
 class DQNAgent:
     def __init__(self, action_space, device):
@@ -15,25 +19,21 @@ class DQNAgent:
         self.target_model.load_state_dict(self.model.state_dict())
         self.target_model.eval()
         self.q_values = []
-        
-        # RMSProp parameters from the paper
+
         self.optimizer = optim.RMSprop(
             self.model.parameters(),
             lr=0.00025,
             alpha=0.95,
             eps=0.01
         )
+
+        self.buffer_size = CONFIGS.BUFFER_SIZE
         
-        # GPU-optimized replay buffer
-        self.buffer_size = 30000  # Reduced from 1M to 100K to 30k
-        
-        # Preallocate tensors for state and next_state directly on GPU
         self.state_buffer = torch.zeros((self.buffer_size, 4, 84, 84), 
                                       dtype=torch.float32, device=self.device)
         self.next_state_buffer = torch.zeros((self.buffer_size, 4, 84, 84), 
                                            dtype=torch.float32, device=self.device)
         
-        # These are smaller, so we keep them on CPU until batch creation
         self.action_buffer = np.zeros(self.buffer_size, dtype=np.int64)
         self.reward_buffer = np.zeros(self.buffer_size, dtype=np.float32)
         self.done_buffer = np.zeros(self.buffer_size, dtype=np.bool_)
@@ -43,24 +43,20 @@ class DQNAgent:
         self.buffer_full = False
         
         self.batch_size = 32
-        self.gamma = 0.99  # Discount factor
+        self.gamma = CONFIGS.GAMMA
         
         # Epsilon annealing
-        self.epsilon_start = 1.0
-        self.epsilon_end = 0.05
-        self.epsilon_decay_steps = 1000000  # 1M frames for linear decay
+        self.epsilon_start = CONFIGS.EPSILON_START
+        self.epsilon_end = CONFIGS.EPSILON_END
+        self.epsilon_decay_steps = CONFIGS.EPSILON_DECAY_STEPS
         self.epsilon = self.epsilon_start
         
-        # Target network update frequency
-        self.target_update_freq = 10000  # Changed from 10K to 1K
+        self.target_update_freq = CONFIGS.TARGET_FREQ_UPDATE
         
-        # Counters
         self.train_step = 0
         self.frame_count = 0
 
     def select_action(self, state):
-        """Select an action using epsilon-greedy strategy with annealing epsilon."""
-        # Update epsilon based on linear schedule
         if self.frame_count < self.epsilon_decay_steps:
             self.epsilon = self.epsilon_start - (self.frame_count / self.epsilon_decay_steps) * (self.epsilon_start - self.epsilon_end)
         else:
@@ -72,7 +68,6 @@ class DQNAgent:
             return random.choice(range(self.action_space.n))  # Explore
         else:
             with torch.no_grad():
-                # No need to convert to tensor if already a tensor
                 if not isinstance(state, torch.Tensor):
                     state = torch.FloatTensor(state).to(self.device)
                 
@@ -84,7 +79,6 @@ class DQNAgent:
                 return q_values.argmax().item()  # Exploit
 
     def store_experience(self, experience):
-        """Store experience directly in GPU tensors to avoid later transfers."""
         state, action, reward, next_state, done = experience
         
         # Clip rewards to [-1, 1] as per the paper
@@ -112,7 +106,6 @@ class DQNAgent:
             self.buffer_full = True
 
     def train(self):
-        """Train the agent using experience replay with GPU optimizations."""
         # Check if we have enough samples
         if not self.buffer_full and self.buffer_idx < self.batch_size:
             return
@@ -154,7 +147,6 @@ class DQNAgent:
         
         self.train_step += 1
         
-        # Update target network periodically
         if self.train_step % self.target_update_freq == 0:
             self.target_model.load_state_dict(self.model.state_dict())
         
@@ -182,7 +174,6 @@ class DQNAgent:
         self.model.eval()
 
     def act(self, state):
-        """Select best action (used for evaluation) without exploration."""
         with torch.no_grad():
             if not isinstance(state, torch.Tensor):
                 state = torch.FloatTensor(state).to(self.device)

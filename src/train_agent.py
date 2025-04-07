@@ -10,6 +10,16 @@ import gc
 from collections import deque
 from agent import DQNAgent
 from tqdm import tqdm
+from config import config
+import argparse
+
+CONFIGS = config
+
+parser = argparse.ArgumentParser(description='Train a reinforcement learning agent.')
+parser.add_argument('--env', type=str, default='ALE/Pong-v5', help='Name of the environment')
+parser.add_argument('--checkpoint', type=str, default=None, help='Path to the checkpoint to resume training from')
+parser.add_argument('--num_frames', type=int, default=CONFIGS.NUM_FRAMES, help='Number of frames to train the agent')
+
 
 # Check available devices
 device = torch.device("cuda" if torch.cuda.is_available() else 
@@ -270,9 +280,12 @@ def train_agent(env_name, num_frames=50000000, checkpoint=None):
     print("Training complete!")
 
 if __name__ == "__main__":
-    # Uncomment the line below to continue from your last checkpoint
-    env = "ALE/SpaceInvaders-v5"
-    train_agent(env, num_frames=5000000, checkpoint="logs_SpaceInvaders-v5/SpaceInvaders-v5_frame_1040000.pth")
+    args = parser.parse_args()
+    env = args.env
+    checkpoint = args.checkpoint
+    num_frames = args.num_frames
+    if checkpoint:
+        train_agent(env, num_frames, checkpoint)
+    else:
+        train_agent(env, num_frames)
     
-    # Or start fresh
-    #train_agent(env, num_frames=5000000)
