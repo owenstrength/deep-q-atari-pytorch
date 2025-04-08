@@ -78,7 +78,7 @@ The training and evaluation results are logged in the `logs_{ENV_NAME}` director
 | DQN                    | 4092     | 168      | 470    | 20   | 1952   | 1705     | 581         |
 | DQN Small (Ours)       | **5208** | 40       | **502**| 13   | **3003**| 1480     | 416         |
 | Human                  | 7456     | 31       | 368    | −3   | 18900  | 28010    | 3690        |
-|
+|Best                    | **B. Rider** | **Breakout** | **Enduro** | **Pong** | **Q*bert** | **Seaquest** | **S. Invaders**|             
 | HNeat Best             | 3616     | 52       | 106    | 19   | 1800   | 920      | 1720        |
 | HNeat Pixel            | 1332     | 4        | 91     | −16  | 1325   | 800      | 1145        |
 | DQN Best               | 5184     | 225      | 661    | 21   | 4500   | 1740     | 1075        |
@@ -88,3 +88,30 @@ The training and evaluation results are logged in the `logs_{ENV_NAME}` director
 
 **Why does our smaller DQN perform better in some environments?**
 - The smaller DQN model outperforms the original implementation in certain environments due to its more focused replay buffer that prioritizes recent experiences. Its streamlined architecture enables faster convergence by reducing overfitting on specific game patterns, while modern implementation techniques provide subtle optimizations not present in the original paper. The reduced memory footprint creates a beneficial constraint that forces more efficient learning from fewer samples, demonstrating that larger models aren't always necessary for superior reinforcement learning performance.
+
+## Configs
+
+```python
+# AGENT
+self.BUFFER_SIZE = 30000 # Reduced from 1M to 30k
+
+self.GAMMA = 0.99
+
+self.EPSILON_START = 1.0
+self.EPSILON_END = 0.05
+self.EPSILON_DECAY_STEPS = 1000000  # 1M frames for linear decay
+
+self.TARGET_FREQ_UPDATE = 10000  # Changed from 10K to 1K
+
+# TRAIN_AGENT
+self.NUM_FRAMES = 5000000 # Reduced from 50M to 5M
+```
+
+## Training Curves
+
+### Enduro-v5
+![q values](./logs_Enduro-v5/avg_q_value_vs_episode.png)
+![avg reward](./logs_Enduro-v5/avg_reward_vs_episode.png)
+![reward](./logs_Enduro-v5/avg_reward_vs_episode.png)
+
+The training curves show the average Q-value and average reward per episode over the training process. The agent learns to play the game by maximizing its reward through reinforcement learning. You can clearly see when the model performs well and when it doesn't. The average Q-value and average reward increase over time, indicating that the agent is learning to play the game effectively. The Q value plateaus after a certain number of episodes, indicating that the agent has learned to play the game well and is no longer improving significantly. The reward curve shows the total reward received by the agent in each episode, which also increases over time as the agent learns to play the game better.
