@@ -1,7 +1,7 @@
 # Playing Atari with Deep Reinforcement Learning (PyTorch Reimplementation)
 This repository contains a PyTorch implementation of the Deep Reinforcement Learning algorithm for playing Atari games. The code is based on the paper "Playing Atari with Deep Reinforcement Learning" by Mnih et al. (2013). The implementation is designed to be simple and easy to understand, while still being efficient and effective.
 
-ADD GIF OF AGENT HERE
+![BeamRider-v5](./public/breamrider.gif)
 
 ## Installation
 To install the required packages, you can use the following command:
