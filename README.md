@@ -112,6 +112,6 @@ self.NUM_FRAMES = 5000000 # Reduced from 50M to 5M
 ### Enduro-v5
 ![q values](./logs_Enduro-v5/avg_q_value_vs_episode.png)
 ![avg reward](./logs_Enduro-v5/avg_reward_vs_episode.png)
-![reward](./logs_Enduro-v5/avg_reward_vs_episode.png)
+![reward](./logs_Enduro-v5/reward_vs_episode.png)
 
 The training curves show the average Q-value and average reward per episode over the training process. The agent learns to play the game by maximizing its reward through reinforcement learning. You can clearly see when the model performs well and when it doesn't. The average Q-value and average reward increase over time, indicating that the agent is learning to play the game effectively. The Q value plateaus after a certain number of episodes, indicating that the agent has learned to play the game well and is no longer improving significantly. The reward curve shows the total reward received by the agent in each episode, which also increases over time as the agent learns to play the game better.
