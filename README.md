@@ -31,7 +31,7 @@ To evaluate the agent, you can use the following command:
 Replace `<ENV_NAME>` with the name of the Atari environment you want to evaluate on (e.g., `ALE/Pong-v5`), `<NUM_EPISODES>` with the number of episodes you want to evaluate for, and `<RENDER_MODE>` with the render mode (e.g., `human` or `rgb_array`).
 
 ```bash
-python src/test_agent.py --env <ENV_NAME> --num_episodes <NUM_EPISODES> -- render_mode <RENDER_MODE>
+python src/test_agent.py --env <ENV_NAME> --num_episodes <NUM_EPISODES> --render_mode <RENDER_MODE>
 ```
 
 ## Directory Structure
@@ -106,6 +106,8 @@ self.TARGET_FREQ_UPDATE = 10000  # Changed from 10K to 1K
 # TRAIN_AGENT
 self.NUM_FRAMES = 5000000 # Reduced from 50M to 5M
 ```
+
+These Config changes reduced the expected time to train of ~363 hours to ~12 hours (per experiment) on a single GPU. The training time can be further reduced by using multiple GPUs or Apple Silicon with Metal.
 
 ## Training Curves
 
